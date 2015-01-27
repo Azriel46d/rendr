@@ -1,6 +1,5 @@
 var _ = require('underscore'),
     express = require('express'),
-    errorHandler = require('errorhandler')
     Router = require('./router'),
     RestAdapter = require('./data_adapter/rest_adapter'),
     ViewEngine = require('./viewEngine'),
@@ -46,7 +45,7 @@ function Server(options) {
   this.viewEngine = this.options.viewEngine || new ViewEngine();
 
   this.errorHandler = this.options.errorHandler =
-    this.options.errorHandler || errorHandler();
+    this.options.errorHandler || express.errorHandler();
 
   this.router = new Router(this.options);
 

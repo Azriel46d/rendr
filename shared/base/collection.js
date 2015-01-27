@@ -9,7 +9,7 @@ if (!isServer) {
   Backbone.$ = window.$ || require('jquery');
 }
 
-var BaseCollection = Super.extend({
+BaseCollection = Super.extend({
 
   model: BaseModel,
 
@@ -46,9 +46,12 @@ var BaseCollection = Super.extend({
       delete this.options.meta;
     }
 
+
     Super.apply(this, arguments);
 
-    this.store();
+    if(!isServer){
+        this.delegateSocketEvents();
+    }
   },
 
   /**
@@ -111,12 +114,10 @@ var BaseCollection = Super.extend({
    * Instance method to store the collection and its models.
    */
   store: function() {
-    if (this.app && this.app.fetcher) {
-      this.each(function(model) {
-        model.store();
-      });
-      this.app.fetcher.collectionStore.set(this);
-    }
+    this.each(function(model) {
+      model.store();
+    });
+    this.app.fetcher.collectionStore.set(this);
   }
 });
 
@@ -125,5 +126,9 @@ var BaseCollection = Super.extend({
  * encapsulates logic for fetching data from the API.
  */
 _.extend(BaseCollection.prototype, syncer);
+if (!isServer){
+    var socketEvents = require('../../client/socketEvents');
+    _.extend(BaseCollection.prototype, socketEvents);
+}
 
 module.exports = BaseCollection;

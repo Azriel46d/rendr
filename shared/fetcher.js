@@ -26,7 +26,7 @@ function Fetcher(options) {
 }
 
 Fetcher.prototype.buildOptions = function(additionalOptions, params) {
-  var options = {app: this.app, parse: true};
+  var options = {app: this.app};
   _.defaults(options, additionalOptions);
   _.defaults(options, params);
   return options;
@@ -109,23 +109,33 @@ Fetcher.prototype._retrieve = function(fetchSpecs, options, callback) {
 
   _.each(fetchSpecs, function(spec, name) {
     batchedRequests[name] = function(cb) {
-      var model;
+      var collectionData, model, modelData, modelOptions;
 
       if (!options.readFromCache) {
-        this.fetchFromApi(spec, options, cb);
+        this.fetchFromApi(spec, cb);
       } else {
-        model = null;
+        modelData = null;
+        modelOptions = {};
 
         // First, see if we have stored the model or collection.
         if (spec.model != null) {
 
-          this._retrieveModel(spec, function(err, model) {
-            this._refreshData(spec, model, options, cb);
+          this._retrieveModel(spec, function(err, modelData) {
+            this._retrieveModelData(spec, modelData, modelOptions, cb);
           }.bind(this));
 
         } else if (spec.collection != null) {
-          this.collectionStore.get(spec.collection, spec.params, function(collection) {
-            this._refreshData(spec, collection, options, cb);
+
+          this.collectionStore.get(spec.collection, spec.params, function(collectionData) {
+            if (collectionData) {
+              modelData = this.retrieveModelsForCollectionName(spec.collection, collectionData.ids);
+              modelOptions = {
+                meta: collectionData.meta,
+                params: collectionData.params
+              };
+            }
+
+            this._retrieveModelData(spec, modelData, modelOptions, cb);
           }.bind(this));
 
         }
@@ -136,26 +146,27 @@ Fetcher.prototype._retrieve = function(fetchSpecs, options, callback) {
   async.parallel(batchedRequests, callback);
 };
 
-Fetcher.prototype._refreshData = function(spec, modelOrCollection, options, cb) {
+Fetcher.prototype._retrieveModelData = function(spec, modelData, modelOptions, cb) {
 
   // If we found the model/collection in the store, then return that.
-  if (!this.needsFetch(modelOrCollection, spec)) {
+  if (!this.needsFetch(modelData, spec)) {
+    model = this.getModelOrCollectionForSpec(spec, modelData, modelOptions);
+
     /**
      * If 'checkFresh' is set (and we're in the client), then before we
      * return the cached object we fire off a fetch, compare the results,
      * and if the data is different, we trigger a 'refresh' event.
      */
     if (spec.checkFresh && !isServer && this.shouldCheckFresh(spec)) {
-      modelOrCollection.checkFresh();
+      model.checkFresh();
       this.didCheckFresh(spec);
     }
-
-    cb(null, modelOrCollection);
+    cb(null, model);
   } else {
     /**
      * Else, fetch anew.
      */
-    this.fetchFromApi(spec, options, cb);
+    this.fetchFromApi(spec, cb);
   }
 }
 
@@ -164,8 +175,9 @@ Fetcher.prototype._retrieveModel = function(spec, callback) {
 
   // Attempt to fetch from the modelStore based on the idAttribute
   this.modelUtils.modelIdAttribute(spec.model, function(idAttribute) {
-    var model = fetcher.modelStore.get(spec.model, spec.params[idAttribute]);
-    if (model) return callback(null, model);
+    var modelData = fetcher.modelStore.get(spec.model, spec.params[idAttribute]);
+    if (modelData)
+      return callback(null, modelData);
 
     // if there are no other keys than the id in the params, return null;
     if (_.isEmpty(_.omit(spec.params, idAttribute)))
@@ -176,15 +188,11 @@ Fetcher.prototype._retrieveModel = function(spec, callback) {
   });
 };
 
-Fetcher.prototype.needsFetch = function(modelOrCollection, spec) {
-  if (modelOrCollection == null) return true;
-
-  if (this.modelUtils.isModel(modelOrCollection) && this.isMissingKeys(modelOrCollection.attributes, spec.ensureKeys)) {
-    return true;
-  }
-
+Fetcher.prototype.needsFetch = function(modelData, spec) {
+  if (modelData == null) return true;
+  if (this.isMissingKeys(modelData, spec.ensureKeys)) return true;
   if (spec.needsFetch === true) return true;
-  if (typeof spec.needsFetch === 'function' && spec.needsFetch(modelOrCollection)) return true;
+  if (typeof spec.needsFetch === 'function' && spec.needsFetch(modelData)) return true;
   return false;
 };
 
@@ -194,11 +202,9 @@ Fetcher.prototype.isMissingKeys = function(modelData, keys) {
   if (keys == null) {
     return false;
   }
-
   if (!_.isArray(keys)) {
     keys = [keys];
   }
-
   for (var i = 0, len = keys.length; i < len; i++) {
     key = keys[i];
     if (modelData[key] == null) {
@@ -208,12 +214,10 @@ Fetcher.prototype.isMissingKeys = function(modelData, keys) {
   return false;
 };
 
-Fetcher.prototype.fetchFromApi = function(spec, options, callback) {
+Fetcher.prototype.fetchFromApi = function(spec, callback) {
   var model = this.getModelOrCollectionForSpec(spec),
       fetcher = this;
-
   model.fetch({
-    headers: options.headers || {},
     data: spec.params,
     success: function(model, body) {
       callback(null, model);
@@ -234,12 +238,22 @@ Fetcher.prototype.fetchFromApi = function(spec, options, callback) {
 
 Fetcher.prototype.retrieveModelsForCollectionName = function(collectionName, modelIds) {
   var modelName = this.modelUtils.getModelNameForCollectionName(collectionName);
+  if (!modelName){
+    return this.retrieveModels('', modelIds);
+  }
   return this.retrieveModels(modelName, modelIds);
 };
 
 Fetcher.prototype.retrieveModels = function(modelName, modelIds) {
+
   return modelIds.map(function(id) {
-    return this.modelStore.get(modelName, id);
+    if (!modelName.length && id.indexOf(':') >-1){
+       var nameIdSplit = id.split(':');
+      return this.modelStore.get(nameIdSplit[0], nameIdSplit[1]);
+    } else {
+      return this.modelStore.get(modelName, id);
+    }
+
   }, this);
 };
 
@@ -248,13 +262,34 @@ Fetcher.prototype.summarize = function(modelOrCollection) {
       idAttribute;
 
   if (this.modelUtils.isCollection(modelOrCollection)) {
-    idAttribute = modelOrCollection.model.prototype.idAttribute;
-    summary = {
-      collection: this.modelUtils.modelName(modelOrCollection.constructor),
-      ids: modelOrCollection.pluck(idAttribute),
-      params: modelOrCollection.params,
-      meta: modelOrCollection.meta
-    };
+
+
+    if (typeof modelOrCollection.model == 'function') {
+      //if polymorphic collection
+
+      var ids = [];
+      _.each(modelOrCollection.models,function(model){
+         ids.push(model.constructor.id +':'+model.get(model.idAttribute));
+
+      });
+      summary = {
+        collection: this.modelUtils.modelName(modelOrCollection.constructor),
+        ids: ids,
+        params: modelOrCollection.params,
+        meta: modelOrCollection.meta
+      };
+    }else{
+      //else
+      idAttribute = modelOrCollection.model.prototype.idAttribute;
+      summary = {
+        collection: this.modelUtils.modelName(modelOrCollection.constructor),
+        ids: modelOrCollection.pluck(idAttribute),
+        params: modelOrCollection.params,
+        meta: modelOrCollection.meta
+      };
+    }
+
+
   } else if (this.modelUtils.isModel(modelOrCollection)) {
     idAttribute = modelOrCollection.idAttribute;
     summary = {
@@ -277,6 +312,7 @@ Fetcher.prototype.bootstrapData = function(modelMap) {
 
   async.forEach(_.keys(modelMap), function(name, cb) {
     var map = modelMap[name];
+
     fetcher.getModelOrCollectionForSpec(map.summary, map.data, _.pick(map.summary, 'params', 'meta'), function(modelOrCollection) {
       results[name] = modelOrCollection;
       cb(null);
@@ -304,7 +340,7 @@ Fetcher.prototype.hydrate = function(summaries, options, callback) {
   async.forEach(_.keys(summaries), function(name, cb) {
     var summary = summaries[name];
     if (summary.model != null) {
-      results[name] = fetcher.modelStore.get(summary.model, summary.id);
+      results[name] = fetcher.modelStore.get(summary.model, summary.id, true);
 
       if ((results[name] != null) && (options.app != null)) {
         results[name].app = options.app;
@@ -313,15 +349,31 @@ Fetcher.prototype.hydrate = function(summaries, options, callback) {
       cb(null);
 
     } else if (summary.collection != null) {
+
       // Also support getting all models for a collection.
-      fetcher.collectionStore.get(summary.collection, summary.params, function(collection) {
-        if (collection == null) {
+      fetcher.collectionStore.get(summary.collection, summary.params, function(collectionData) {
+        var collectionOptions,
+            models;
+
+        if (collectionData == null) {
           throw new Error("Collection of type \"" + summary.collection + "\" not found for params: " + JSON.stringify(summary.params));
         }
 
-        results[name] = collection;
+        models = fetcher.retrieveModelsForCollectionName(summary.collection, collectionData.ids);
+        collectionOptions = {
+          params: summary.params,
+          meta: collectionData.meta,
+          app: options.app
+        };
+        fetcher.modelUtils.getCollection(summary.collection, models, collectionOptions, function(collection) {
+          results[name] = collection;
 
-        cb(null);
+          if ((results[name] != null) && (options.app != null)) {
+            results[name].app = options.app;
+          }
+
+          cb(null);
+        });
       });
     }
   }, function(err) {

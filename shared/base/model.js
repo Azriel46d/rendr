@@ -22,8 +22,11 @@ var BaseModel = Backbone.Model.extend({
 
     Backbone.Model.apply(this, arguments);
 
-    this.store();
-    this.on('change:' + this.idAttribute, this.store, this);
+    this.on('change', this.store, this);
+
+    if(!isServer){
+        this.delegateSocketEvents();
+    }
   },
 
   /**
@@ -41,10 +44,10 @@ var BaseModel = Backbone.Model.extend({
    * Instance method to store in the modelStore.
    */
   store: function() {
-    if (this.id !== undefined && this.app && this.app.fetcher) {
-      this.app.fetcher.modelStore.set(this);
-    }
-  }
+    this.app.fetcher.modelStore.set(this);
+  },
+
+
 });
 
 /**
@@ -52,5 +55,13 @@ var BaseModel = Backbone.Model.extend({
  * encapsulates logic for fetching data from the API.
  */
 _.extend(BaseModel.prototype, syncer);
+
+/**
+ *  if client , Mix-in the socket delegator
+ */
+if (!isServer){
+    var socketEvents = require('../../client/socketEvents');
+    _.extend(BaseModel.prototype, socketEvents);
+}
 
 module.exports = BaseModel;

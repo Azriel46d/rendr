@@ -9,9 +9,22 @@ var Backbone = require('backbone'),
     isServer = (typeof window === 'undefined'),
     ClientRouter;
 
+//var widgets =require('renderer');
+
 if (!isServer) {
-  ClientRouter = require('app/router');
+  ClientRouter = require('../../../app/router');
   Backbone.$ = window.$ || require('jquery');
+    global.$ = global.jQuery = require("jquery");
+    global.Hammer = require("hammerjs");
+    window.moment = global.moment  = require("moment");
+
+   // require('d3');
+    //window.widgets = widgets;
+    Backbone.socket = window.socket = require('socket.io-client')();
+    //Register default events
+    require('../client/defaultSocketEvents')()
+    localStorage.debug='socket.io-client:socket'; //TODO remove debuggin
+
 }
 
 module.exports = Backbone.Model.extend({

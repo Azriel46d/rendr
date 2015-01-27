@@ -10,13 +10,13 @@ var _ = require('underscore'),
     BaseRouter = require('../shared/base/router'),
     BaseView = require('../shared/base/view'),
     $ = (typeof window !== 'undefined' && window.$) || require('jquery'),
+
     extractParamNamesRe = /:(\w+)/g,
     plusRe = /\+/g,
     firstRender = true,
     defaultRootPath = '';
 
 Backbone.$ = $;
-
 function noop() {}
 
 module.exports = ClientRouter;
@@ -254,8 +254,7 @@ ClientRouter.prototype.getRenderCallback = function(route) {
     }
 
     var defaults = this.defaultHandlerParams(viewPath, locals, route);
-    viewPath = defaults[0];
-    locals = defaults[1];
+    viewPath = defaults[0], locals = defaults[1];
 
     locals = locals || {};
     _.extend(locals, { fetch_summary: BaseView.extractFetchSummary(this.app.modelUtils, locals) });

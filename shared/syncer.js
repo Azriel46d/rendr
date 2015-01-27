@@ -21,11 +21,10 @@ var _ = require('underscore'),
 
 if (isServer) {
   // hide it from requirejs since it's server only
-  var serverOnly_qs = 'qs2';
+  var serverOnly_qs = 'qs';
   var qs = require(serverOnly_qs);
 } else {
-  var $ = window.$ || require('jquery');
-  Backbone.$ = $;
+  Backbone.$ = window.$ || require('jquery');
 }
 
 var syncer = module.exports;
@@ -33,50 +32,44 @@ var syncer = module.exports;
 function clientSync(method, model, options) {
   var error;
   options = _.clone(options);
-  if (!_.isUndefined(options.data)) options.data = _.clone(options.data);
-  options.url = this.getUrl(options.url, true, options.data);
+  options.url = this.getUrl(options.url, true);
   error = options.error;
   if (error) {
-    options.error = function(xhr) {
-      var body = xhr.responseText,
-          contentType = xhr.getResponseHeader('content-type'),
+    options.error = function(res) {
+      var body = res.body,
           resp;
-      if (contentType && contentType.indexOf('application/json') !== -1) {
-        try {
+
+      try {
           body = JSON.parse(body);
-        } catch (e) {}
+      } catch (e) {
+          body = body;
       }
+
       resp = {
         body: body,
-        status: xhr.status
+        status: res.status
       };
       error(resp);
     }
-  }
+  };
   return Backbone.sync(method, model, options);
 }
 
 function serverSync(method, model, options) {
-  var api, urlParts, verb, req, queryStr;
+  var api, urlParts, verb, req;
 
   options = _.clone(options);
-  if (!_.isUndefined(options.data)) options.data = _.clone(options.data);
-  options.url = this.getUrl(options.url, false, options.data);
+
+  options.url = this.getUrl(options.url, false);
+    console.log(options.url)
   verb = methodMap[method];
   urlParts = options.url.split('?');
   req = this.app.req;
-  queryStr = urlParts[1] || '';
-  if (!_.isEmpty(options.data)) queryStr += '&' + qs.stringify(options.data);
-  /**
-   * if queryStr is initially an empty string, leading '&' will still get parsed correctly by qs.parse below.
-   * e.g.  qs.parse('&baz=quux') => { baz: 'quux' }
-   */
 
   api = {
     method: verb,
     path: urlParts[0],
-    query: qs.parse(queryStr),
-    headers: options.headers || {},
+    query: qs.parse(urlParts[1]) || {},
     api: _.result(this, 'api'),
     body: {}
   };
@@ -124,9 +117,11 @@ syncer.getUrl = function getUrl(url, clientPrefix, params) {
   }
   params = params || {};
   url = url || _.result(this, 'url');
+
   if (clientPrefix && !~url.indexOf('://')) {
     url = this.formatClientUrl(url, _.result(this, 'api'));
   }
+
   return this.interpolateParams(this, url, params);
 };
 
@@ -135,7 +130,7 @@ syncer.formatClientUrl = function(url, api) {
   if (api) {
     prefix += '/' + api;
   }
-  prefix += '/-';
+  prefix += '';
   return prefix + url;
 };
 
@@ -238,10 +233,5 @@ syncer.interpolateParams = function interpolateParams(model, url, params) {
       delete params[property];
     });
   }
-  /**
-   * Separate deletion of idAttribute from params hash necessary if using urlRoot in the model
-   * so we don't get urls like: /v1/threads/1234?id=1234
-   */
-  delete params[model.idAttribute]
   return url;
 };

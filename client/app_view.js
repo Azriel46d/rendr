@@ -3,6 +3,9 @@ var _ = require('underscore'),
     BaseView = require('../shared/base/view'),
     $ = (typeof window !== 'undefined' && window.$) || require('jquery');
 
+
+
+
 Backbone.$ = $;
 
 module.exports = BaseView.extend({

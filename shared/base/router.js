@@ -1,8 +1,7 @@
 var _ = require('underscore'),
   Backbone = require('backbone'),
   isServer = (typeof window === 'undefined'),
-  isAMDEnvironment = !isServer && (typeof define !== 'undefined'),
-  loadNumber = 0;
+  isAMDEnvironment = !isServer && (typeof define !== 'undefined');
 
 if (!isServer) {
   Backbone.$ = window.$ || require('jquery');
@@ -153,25 +152,11 @@ _.extend(BaseRouter.prototype, Backbone.Events, {
    * Adds a single route definition.
    */
   route: function(pattern) {
-    var realAction, action, definitions, handler, route, routeObj;
+    var action, definitions, handler, route, routeObj;
 
     definitions = _.toArray(arguments).slice(1);
     route = parseRouteDefinitions(definitions);
-    realAction = this.getAction(route);
-    if (isServer) {
-      action = realAction;
-    } else {
-      action = function(params, callback) {
-        var myLoadNumber = ++loadNumber;
-        function next() {
-          // To prevent race conditions we ensure that no future requests have been processed in the mean time.
-          if (myLoadNumber === loadNumber) {
-            callback.apply(this, arguments);
-          }
-        }
-        realAction.call(this, params, next);
-      }
-    }
+    action = this.getAction(route);
 
     if (!(pattern instanceof RegExp) && pattern.slice(0, 1) !== '/') {
       pattern = "/" + pattern;

@@ -36,8 +36,10 @@ ModelUtils.prototype.getCollection = function(path, models, options, callback) {
   var Collection;
   models = models || [];
   options = options || {};
+
   if (typeof callback == 'function') {
     this.getCollectionConstructor(path, function(Collection) {
+
       callback(new Collection(models, options));
     });
   } else {
@@ -93,6 +95,13 @@ ModelUtils.prototype.isCollection = function(obj) {
 ModelUtils.prototype.getModelNameForCollectionName = function(collectionName) {
   var Collection;
   Collection = this.getCollectionConstructor(collectionName);
+
+  //update for polyphormic
+  if (typeof Collection.prototype.model  === 'function'){
+    return null;
+  } else {
+    return this.modelName(Collection.prototype.model);
+  }
   return this.modelName(Collection.prototype.model);
 };
 
@@ -101,13 +110,13 @@ ModelUtils.uppercaseRe = /([A-Z])/g;
 ModelUtils.prototype.underscorize = function(name) {
   if (name == null) {
     return undefined;
-  }
-  name = name.replace(ModelUtils.uppercaseRe, function(c) {
+  } //modified
+  /*name = name.replace(ModelUtils.uppercaseRe, function(c) {
     return "_" + c.toLowerCase();
   });
   if (name[0] === "_") {
     name = name.slice(1);
-  }
+  }*/
   return name;
 };
 

@@ -5,7 +5,7 @@ var _ = require('underscore');
  *   /-/path/to/resource
  *   /api-name/-/path/to/resource
  */
-var separator = '/-/';
+var separator = '/';
 
 /**
  * Middleware handler for intercepting API routes.
@@ -23,35 +23,47 @@ function apiProxy(dataAdapter) {
     api.headers = {
       'x-forwarded-for': apiProxy.getXForwardedForHeader(req.headers, req.ip)
     };
+  console.log(api);
 
     dataAdapter.request(req, api, {
       convertErrorCode: false
     }, function(err, response, body) {
-      if (err) return next(err);
 
-      // Pass through statusCode.
-      res.status(response.statusCode);
-      if (!response.jsonp){
-        res.json(body);
-      }else{
-        res.jsonp(body);
-      }
+
+
+       if (_.isFunction(res)){
+           res(err,response,body)
+       }else {
+           if (err) return next(err);
+            // Pass through statusCode.
+           res.status(response.statusCode);
+           res.json(body);
+       }
+
     });
   };
-}
+};
 
 apiProxy.getApiPath = function getApiPath(path) {
-  var sepIndex = path.indexOf(separator),
-      substrIndex = sepIndex === -1 ? 0 : sepIndex + separator.length - 1;
-  return path.substr(substrIndex);
+
+    if (path.charAt(0) == '/'){
+        path = path.substr(1,path.length-1);
+    }
+    path = path.split('/');
+    path.shift();
+
+    return '/' + path.join('/');
 };
 
 apiProxy.getApiName = function getApiName(path) {
-  var sepIndex = path.indexOf(separator),
-      apiName = null;
-  if (sepIndex > 0) {
-    apiName = path.substr(1, sepIndex - 1);
-  }
+    if (path.charAt(0) == '/'){
+        path = path.substr(1,path.length-1);
+    }
+  var attrs  = path.split('/');
+
+  var apiName;
+  apiName =attrs && attrs[0];
+
   return apiName;
 };
 
