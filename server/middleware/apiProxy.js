@@ -23,7 +23,7 @@ function apiProxy(dataAdapter) {
     api.headers = {
       'x-forwarded-for': apiProxy.getXForwardedForHeader(req.headers, req.ip)
     };
-  console.log(api);
+
 
     dataAdapter.request(req, api, {
       convertErrorCode: false

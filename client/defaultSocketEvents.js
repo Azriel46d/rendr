@@ -12,9 +12,9 @@ function defaultSocketEvents() {
 
             var options = obj.options;
             var defer = obj.defer;
-            if (e.data && e.data.error){
+            if (e.error && e.error || e.statusCode !== 200){
                 //TODO add status code
-                options && options.error && options.error({body : e.data});
+                options && options.error && options.error({body : e,status: e.statusCode});
                 defer && defer.reject();
             } else {
                 options && options.success && options.success(e.data);

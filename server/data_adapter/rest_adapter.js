@@ -15,7 +15,7 @@ function RestAdapter(options) {
    * Default options.
    */
   _.defaults(this.options, {
-    userAgent: 'Rendr RestAdapter; Node.js'
+    userAgent: 'Minely Adapter; Node.js'
   });
 
   request = this.options.request || require('request');
